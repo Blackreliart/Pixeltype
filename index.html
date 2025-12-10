@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PixelType DE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+    <style>
+      /* Custom retro cursor animation */
+      @keyframes blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+      .cursor-blink {
+        animation: blink 1s step-end infinite;
+      }
+      /* Hard pixel shadows */
+      .pixel-shadow {
+        box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.2);
+      }
+      .pixel-shadow-hover:hover {
+        transform: translate(2px, 2px);
+        box-shadow: 2px 2px 0px 0px rgba(0,0,0,0.2);
+      }
+      body {
+        font-family: 'VT323', monospace;
+      }
+    </style>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              pixel: ['"VT323"', 'monospace'],
+            },
+            colors: {
+              retro: {
+                bg: '#e0e0e0',
+                darkBg: '#1a1a1a',
+                panel: '#ffffff',
+                darkPanel: '#2d2d2d',
+                primary: '#0000ff', // Retro blue
+                accent: '#ff9900',
+                success: '#00cc00',
+                error: '#ff3333',
+              }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
+    "react/": "https://esm.sh/react@^19.2.1/",
+    "react": "https://esm.sh/react@^19.2.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body class="bg-retro-bg dark:bg-retro-darkBg text-black dark:text-white transition-colors duration-300 min-h-screen overflow-x-hidden">
+    <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
