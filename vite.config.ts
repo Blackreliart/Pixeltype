@@ -7,9 +7,9 @@ export default defineConfig(({ mode }) => {
 
   return {
     server: {
-      port: 3000,        // Wunsch-Port
-      strictPort: false, // 👉 nimmt automatisch den nächsten freien Port
-      host: '0.0.0.0',
+      port: 3000,        // Startport (optional)
+      strictPort: false, // 👉 sucht automatisch den nächsten freien Port
+      host: true,        // entspricht 0.0.0.0
     },
     plugins: [react()],
     define: {
