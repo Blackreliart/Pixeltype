@@ -1,4 +1,7 @@
+
 # PixelType-DE - 10-Finger Typing Trainer
+<img width="2559" height="1312" alt="Preview" src="https://github.com/user-attachments/assets/fb101e34-91d9-4b25-9cc2-cfb76051eb1c" />
+
 
 PixelType-DE is a browser-based 10-finger typing training web app using words. The app helps users practice typing as fast and accurately as possible. It is built with React and TypeScript (TSX) using Vite. The project also includes persistent highscore functionality, allowing multiple users on the same server to access the same ranking.
 
