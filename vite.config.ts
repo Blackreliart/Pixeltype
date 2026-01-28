@@ -6,10 +6,13 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
 
   return {
+    // Wichtig für GitHub Pages: Der Name deines Repositories
+    base: '/Pixeltype/', 
+    
     server: {
-      port: 3000,        // Startport (optional)
-      strictPort: false, // 👉 sucht automatisch den nächsten freien Port
-      host: true,        // entspricht 0.0.0.0
+      port: 3000,
+      strictPort: false,
+      host: true,
     },
     plugins: [react()],
     define: {
@@ -18,7 +21,7 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(new URL('.', import.meta.url).pathname, '.'),
       },
     },
   };
