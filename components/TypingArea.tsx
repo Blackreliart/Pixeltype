@@ -99,25 +99,44 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
 const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    if (!startTime && value.length > 0) {
-      setStartTime(Date.now());
-      onStart();
-    }
-
-    if (value.length > input.length) {
-      const lastChar = value.slice(-1);
-      const expectedChar = words[value.length - 1];
-      if (lastChar === expectedChar) {
-        setCorrectChars((prev) => prev + 1);
-        audioService.playKeyPress();
-      } else {
-        setIncorrectChars((prev) => prev + 1);
-        audioService.playError();
-      }
-      setLastPressed(lastChar);
-    }
+    
+    // ... dein bestehender Code für Start, Hits, Sounds ...
 
     setInput(value);
+
+    // --- GLOBAL-SAFE SCROLL LOGIK ---
+    setTimeout(() => {
+      const container = containerRef.current;
+      const currentEl = container?.querySelector('.current-char') as HTMLElement;
+      
+      if (container && currentEl) {
+        // Holen uns die exakte Position auf dem Monitor
+        const containerRect = container.getBoundingClientRect();
+        const charRect = currentEl.getBoundingClientRect();
+
+        // Abstand des Cursors vom oberen Rand des sichtbaren Kastens
+        const relativeTop = charRect.top - containerRect.top;
+
+        // DEBUGGING: Aktiviere dies, um in der F12-Konsole die Werte zu sehen
+        // console.log('Abstand oben:', relativeTop, 'Aktueller Offset:', lineOffset);
+
+        // Wenn der Cursor tiefer als die Mitte des Kastens (ca. 100px) fällt
+        if (relativeTop > 110) {
+          // Wir schieben den Text um eine Zeile hoch
+          setLineOffset(prev => prev + 45); 
+        }
+
+        // Falls du mit Backspace Zeilen löschst:
+        if (relativeTop < 40 && lineOffset > 0) {
+          setLineOffset(prev => Math.max(0, prev - 45));
+        }
+      }
+    }, 0);
+    
+    if (value.length === words.length) {
+      handleFinish();
+    }
+  };
 
     // --- FINALE SCROLL-LOGIK ---
     setTimeout(() => {
