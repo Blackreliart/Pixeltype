@@ -38,7 +38,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
   const [startTime, setStartTime] = useState<number | null>(null);
   const [lastPressed, setLastPressed] = useState<string | null>(null);
   
-  // Scroll State für zeilenweises Hochrutschen
+  // State für das manuelle Hochscrollen
   const [lineOffset, setLineOffset] = useState(0);
 
   // UI States
@@ -50,11 +50,16 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Initialisiere Text & Reset Scroll
+  // Initialisiere Text & Reset Scroll-Position
   useEffect(() => {
     setWords(generateText(mode, language, binaryMode).split(''));
     setLineOffset(0);
     setInput('');
+    setStartTime(null);
+    setElapsedTime(0);
+    setCorrectChars(0);
+    setIncorrectChars(0);
+    if (typeof duration === 'number') setTimeLeft(duration);
   }, [mode, language, binaryMode, duration]);
 
   // Timer Logik
@@ -73,7 +78,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
     return () => clearInterval(interval);
   }, [isActive, timeLeft, duration]);
 
-  // Globaler Key-Listener für Fokus-Erzwingung
+  // Globaler Key-Listener (Fokus-Retter)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -94,11 +99,14 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
+    
+    // Start-Trigger
     if (!startTime && value.length > 0) {
       setStartTime(Date.now());
       onStart();
     }
 
+    // Treffer-Logik & Sound
     if (value.length > input.length) {
       const lastChar = value.slice(-1);
       const expectedChar = words[value.length - 1];
@@ -114,19 +122,25 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
     setInput(value);
 
-    // --- ZEILENWEISE SCROLL LOGIK ---
+    // --- ROBUSTE ZEILEN-SCROLL LOGIK ---
     setTimeout(() => {
       if (containerRef.current) {
-        const currentEl = containerRef.current.querySelector('.current-char') as HTMLElement;
+        const container = containerRef.current;
+        const currentEl = container.querySelector('.current-char') as HTMLElement;
+        
         if (currentEl) {
-          const containerRect = containerRef.current.getBoundingClientRect();
-          const charRect = currentEl.getBoundingClientRect();
-          const relativeTop = charRect.top - containerRect.top;
-
-          // Sobald der Cursor tiefer als die Mitte des Feldes rutscht (ca. 100px bei p-8)
-          // schieben wir den gesamten Text um eine Zeilenhöhe (ca. 42px) nach oben.
-          if (relativeTop > 120) {
-            setLineOffset(prev => prev + 42); 
+          const charOffsetTop = currentEl.offsetTop;
+          // Wenn der Cursor weiter unten als 100px ist (relativ zum Textanfang),
+          // aber unser Sichtfeld nur 160px hoch ist, schieben wir hoch.
+          const threshold = 100; 
+          
+          if (charOffsetTop - lineOffset > threshold) {
+            setLineOffset(prev => prev + 42); // Schiebt exakt eine Zeile hoch
+          }
+          
+          // Backspace-Logik: Wieder hochscrollen, wenn man zurücklöscht
+          if (charOffsetTop - lineOffset < 40 && lineOffset > 0) {
+            setLineOffset(prev => Math.max(0, prev - 42));
           }
         }
       }
@@ -159,8 +173,8 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
   const renderText = () => {
     return (
       <div 
-        className="flex flex-wrap gap-x-[0.2ch] gap-y-3 text-2xl leading-relaxed select-none transition-all duration-300 ease-out"
-        style={{ marginTop: `-${lineOffset}px` }} // Hier wird der Text hochgeschoben
+        className="flex flex-wrap gap-x-[0.2ch] gap-y-3 text-2xl leading-relaxed select-none transition-all duration-300 ease-in-out"
+        style={{ marginTop: `-${lineOffset}px` }}
       >
         {words.map((char, index) => {
           let colorClass = "text-gray-400";
@@ -178,7 +192,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
             >
               {char}
               {isCurrent && (
-                <span className="absolute left-0 -bottom-1 w-full h-1 bg-retro-accent animate-pulse cursor-blink"></span>
+                <span className="absolute left-0 -bottom-1 w-full h-1 bg-retro-accent animate-pulse"></span>
               )}
             </span>
           );
@@ -191,7 +205,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
   return (
     <div className="flex flex-col gap-8 w-full">
-      {/* HUD */}
+      {/* HUD (Stats oben) */}
       <div className="flex flex-wrap gap-4 justify-between items-center bg-retro-panel dark:bg-retro-darkPanel p-4 border-2 border-black dark:border-white pixel-shadow">
         <div className="flex gap-4 md:gap-8 text-xl">
           <div className="flex flex-col">
@@ -226,7 +240,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
         </div>
       </div>
 
-      {/* Typing Field */}
+      {/* Typing Field (Das Herzstück) */}
       <div 
         ref={containerRef}
         className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-400 p-8 h-[160px] pixel-shadow cursor-text overflow-hidden"
@@ -255,7 +269,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
         />
       </div>
 
-      {/* Visual Helpers */}
+      {/* Visual Helpers (Keyboard/Hands) */}
       <div className="flex flex-col items-center gap-2">
         {showHands && <Hands language={language} activeChar={nextChar} showColors={showFingerColors} lastPressedKey={lastPressed} />}
         {showKeyboard && <VirtualKeyboard language={language} activeChar={nextChar} showLabels={showKeyLabels} showColors={showFingerColors} lastPressedKey={lastPressed} />}
