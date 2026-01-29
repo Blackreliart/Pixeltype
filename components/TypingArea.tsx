@@ -307,7 +307,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
         ref={containerRef}
       >
         {!isActive && (duration === 'infinity' || timeLeft === duration) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-black/80 z-10 backdrop-blur-sm p-4 text-center">
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-black/80 z-10 p-4 text-center">
             <span className={`text-xl animate-pulse text-gray-500 dark:text-gray-300 ${binaryMode ? 'break-all' : ''}`}>
                {t.start_placeholder}
             </span>
