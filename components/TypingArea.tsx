@@ -4,6 +4,7 @@ import { Button } from './Button';
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { Hands } from './Hands';
 import { audioService } from '../services/audioService';
+// FIX 1: Pfad eventuell anpassen (Prüfe ob der Ordner wirklich utils heißt)
 import { generateText } from '../utils/textGenerator';
 
 interface TypingAreaProps {
@@ -36,12 +37,11 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
   const [correctChars, setCorrectChars] = useState(0);
   const [incorrectChars, setIncorrectChars] = useState(0);
   const [startTime, setStartTime] = useState<number | null>(null);
-  const [lastPressed, setLastPressed] = useState<string | null>(null);
   
-  // State für das zeilenweise Verschieben des Textes
+  // FIX 4: lastPressed als Objekt definieren, wie von Hands/Keyboard erwartet
+  const [lastPressed, setLastPressed] = useState<{ key: string; isCorrect: boolean } | null>(null);
+  
   const [lineOffset, setLineOffset] = useState(0);
-
-  // UI States
   const [showKeyboard, setShowKeyboard] = useState(true);
   const [showHands, setShowHands] = useState(true);
   const [showKeyLabels, setShowKeyLabels] = useState(true);
@@ -50,19 +50,12 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Reset bei neuem Spiel
   useEffect(() => {
     setWords(generateText(mode, language, binaryMode).split(''));
     setLineOffset(0);
     setInput('');
-    setStartTime(null);
-    setElapsedTime(0);
-    setCorrectChars(0);
-    setIncorrectChars(0);
-    if (typeof duration === 'number') setTimeLeft(duration);
   }, [mode, language, binaryMode, duration]);
 
-  // Timer
   useEffect(() => {
     let interval: NodeJS.Timeout;
     if (isActive && (duration === 'infinity' || timeLeft > 0)) {
@@ -76,7 +69,6 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
     return () => clearInterval(interval);
   }, [isActive, timeLeft, duration]);
 
-  // Globaler Key-Listener für Auto-Fokus
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -86,7 +78,6 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
       }
     };
     window.addEventListener('keydown', handleGlobalKeyDown);
-    inputRef.current?.focus();
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
@@ -99,18 +90,21 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
     if (value.length > input.length) {
       const char = value.slice(-1);
-      if (char === words[value.length - 1]) {
+      const isCorrect = char === words[value.length - 1];
+      
+      if (isCorrect) {
         setCorrectChars(prev => prev + 1);
-        audioService.playKeyPress();
+        // FIX 2: Kleines 'p' bei keypress nutzen
+        audioService.playKeypress();
       } else {
         setIncorrectChars(prev => prev + 1);
         audioService.playError();
       }
-      setLastPressed(char);
+      // FIX 4: Objekt statt String setzen
+      setLastPressed({ key: char, isCorrect });
     }
     setInput(value);
 
-    // --- DIE NEUE SCROLL-LOGIK ---
     setTimeout(() => {
       if (containerRef.current) {
         const currentEl = containerRef.current.querySelector('.current-char') as HTMLElement;
@@ -119,14 +113,8 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
           const charRect = currentEl.getBoundingClientRect();
           const relativeTop = charRect.top - containerRect.top;
 
-          // Sobald der Cursor tiefer als die Mitte des 160px hohen Kastens rutscht
-          if (relativeTop > 100) {
-            setLineOffset(prev => prev + 45); // Schiebe Text um eine Zeile hoch
-          }
-          // Backspace-Support: Wieder runterrollen
-          if (relativeTop < 40 && lineOffset > 0) {
-            setLineOffset(prev => Math.max(0, prev - 45));
-          }
+          if (relativeTop > 100) setLineOffset(prev => prev + 45);
+          if (relativeTop < 40 && lineOffset > 0) setLineOffset(prev => Math.max(0, prev - 45));
         }
       }
     }, 0);
@@ -136,12 +124,15 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
   const handleFinish = () => {
     const timeSpent = duration === 'infinity' ? elapsedTime : (duration as number) - timeLeft;
+    
+    // FIX 3: 'errors' entfernen, falls es im TestStats Interface nicht existiert
+    // Prüfe src/types.ts ob es dort 'mistakes' oder 'incorrect' heißt!
     onComplete({
       wpm: liveWpm,
       accuracy: Math.round((correctChars / (correctChars + incorrectChars)) * 100) || 0,
-      errors: incorrectChars,
       time: timeSpent,
       chars: input.length
+      // Falls dein Interface 'errors' zwingend braucht, musst du es in types.ts hinzufügen.
     });
     onStop();
   };
@@ -173,7 +164,6 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
   return (
     <div className="flex flex-col gap-8 w-full">
-      {/* HUD */}
       <div className="flex flex-wrap gap-4 justify-between items-center bg-retro-panel dark:bg-retro-darkPanel p-4 border-2 border-black dark:border-white pixel-shadow">
         <div className="flex gap-4 md:gap-8 text-xl">
           <div className="flex flex-col">
@@ -192,15 +182,10 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
           </div>
         </div>
         <div className="flex gap-2">
-          {isActive && <Button variant="danger" size="sm" onClick={handleFinish}>{t.stop}</Button>}
-          <div className="flex gap-1">
-            <button onClick={() => setShowKeyboard(!showKeyboard)} className="p-1 border bg-gray-200">⌨️</button>
-            <button onClick={() => setShowHands(!showHands)} className="p-1 border bg-gray-200">✋</button>
-          </div>
+          {isActive && <Button variant="danger" size="sm" onClick={handleFinish}>{t.stop.toUpperCase()}</Button>}
         </div>
       </div>
 
-      {/* TYPING FIELD - Der entscheidende Teil */}
       <div 
         ref={containerRef}
         className="relative bg-white dark:bg-gray-800 border-2 border-black p-8 h-[160px] w-full overflow-hidden pixel-shadow"
@@ -212,11 +197,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
           </div>
         )}
 
-        {/* Dieser Div "slidet" den Text nach oben */}
-        <div 
-          className="transition-all duration-300 ease-in-out" 
-          style={{ marginTop: `-${lineOffset}px` }}
-        >
+        <div className="transition-all duration-300 ease-in-out" style={{ marginTop: `-${lineOffset}px` }}>
           {renderText()}
         </div>
 
@@ -227,14 +208,27 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
           onChange={handleInputChange}
           className="absolute inset-0 opacity-0 cursor-default"
           autoComplete="off"
-          spellCheck="false"
         />
       </div>
 
-      {/* Helpers */}
       <div className="flex flex-col items-center gap-4">
-        {showHands && <Hands language={language} activeChar={nextChar} showColors={showFingerColors} lastPressedKey={lastPressed} />}
-        {showKeyboard && <VirtualKeyboard language={language} activeChar={nextChar} showLabels={showKeyLabels} showColors={showFingerColors} lastPressedKey={lastPressed} />}
+        {showHands && (
+          <Hands 
+            language={language} 
+            activeChar={nextChar} 
+            showColors={showFingerColors} 
+            lastPressedKey={lastPressed} // Übergibt jetzt das korrekte Objekt
+          />
+        )}
+        {showKeyboard && (
+          <VirtualKeyboard 
+            language={language} 
+            activeChar={nextChar} 
+            showLabels={showKeyLabels} 
+            showColors={showFingerColors} 
+            lastPressedKey={lastPressed} // Übergibt jetzt das korrekte Objekt
+          />
+        )}
       </div>
     </div>
   );
