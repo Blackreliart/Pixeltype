@@ -1,257 +1,184 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { TimeOption, TestStats, Mode, Language } from '../types';
-import { audioService } from '../services/audioService';
-import { generateContent } from '../utils/generator';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Mode, Language, TimeOption, TestStats } from '../types';
+import { Button } from './Button';
 import { VirtualKeyboard } from './VirtualKeyboard';
 import { Hands } from './Hands';
-import { Button } from './Button';
-import { wordToBinary } from '../utils/binary';
+import { audioService } from '../services/audioService';
+import { generateText } from '../utils/textGenerator';
 
 interface TypingAreaProps {
   duration: TimeOption;
   mode: Mode;
   language: Language;
   isActive: boolean;
-  onComplete: (stats: TestStats) => void;
   onStart: () => void;
   onStop: () => void;
-  t: Record<string, string>;
-  binaryMode: boolean;
+  onComplete: (stats: TestStats) => void;
+  t: any;
+  binaryMode?: boolean;
 }
 
-export const TypingArea: React.FC<TypingAreaProps> = ({ 
-  duration, 
-  mode, 
-  language, 
-  isActive, 
-  onComplete, 
-  onStart, 
+export const TypingArea: React.FC<TypingAreaProps> = ({
+  duration,
+  mode,
+  language,
+  isActive,
+  onStart,
   onStop,
+  onComplete,
   t,
-  binaryMode
+  binaryMode = false,
 }) => {
-  const [words, setWords] = useState<string[]>([]);
   const [input, setInput] = useState('');
-  
-  // Timer state
-  const [timeLeft, setTimeLeft] = useState(typeof duration === 'number' ? duration : 0);
+  const [words, setWords] = useState<string[]>([]);
+  const [timeLeft, setTimeLeft] = useState<number>(typeof duration === 'number' ? duration : 0);
   const [elapsedTime, setElapsedTime] = useState(0);
-
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [correctChars, setCorrectChars] = useState(0);
+  const [incorrectChars, setIncorrectChars] = useState(0);
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [lastPressed, setLastPressed] = useState<string | null>(null);
   
-  // UI Toggles
+  // UI States
   const [showKeyboard, setShowKeyboard] = useState(true);
   const [showHands, setShowHands] = useState(true);
   const [showKeyLabels, setShowKeyLabels] = useState(true);
   const [showFingerColors, setShowFingerColors] = useState(true);
 
-  // Stats tracking
-  const [correctChars, setCorrectChars] = useState(0);
-  const [incorrectChars, setIncorrectChars] = useState(0);
-  const [startTime, setStartTime] = useState<number | null>(null);
-  
-  // Feedback state for visuals
-  const [lastPressed, setLastPressed] = useState<{key: string, isCorrect: boolean} | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Generate words on mount or reset
-  const generate = useCallback(() => {
-    // Generate more words for infinity mode to prevent running out quickly
-    const count = duration === 'infinity' ? 1000 : 300;
-    const newWords = generateContent(mode, language, count);
-    
-    if (binaryMode) {
-      setWords(newWords.map(w => wordToBinary(w)));
-    } else {
-      setWords(newWords);
-    }
-  }, [mode, language, duration, binaryMode]);
-
+  // Initialisiere Text
   useEffect(() => {
-    generate();
-  }, [generate]);
+    setWords(generateText(mode, language, binaryMode).split(''));
+  }, [mode, language, binaryMode]);
 
-  // Reset when duration, mode, or language changes
+  // Timer Logik
   useEffect(() => {
-    resetGame();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [duration, mode, language, binaryMode]); // Add binaryMode to reset if it toggles
-
-  const resetGame = () => {
-    setInput('');
-    setTimeLeft(typeof duration === 'number' ? duration : 0);
-    setElapsedTime(0);
-    setCorrectChars(0);
-    setIncorrectChars(0);
-    setStartTime(null);
-    setLastPressed(null);
-    if (!isActive && inputRef.current) inputRef.current.blur();
-  };
-
-  // Timer Logic
-  useEffect(() => {
-    let interval: number;
-    if (isActive) {
-      interval = window.setInterval(() => {
-        if (duration === 'infinity') {
-          setElapsedTime(prev => prev + 1);
-        } else {
-          setTimeLeft((prev) => {
-            if (prev <= 1) {
-              handleFinish();
-              return 0;
-            }
-            return prev - 1;
-          });
+    let interval: NodeJS.Timeout;
+    if (isActive && (duration === 'infinity' || timeLeft > 0)) {
+      interval = setInterval(() => {
+        setElapsedTime((prev) => prev + 1);
+        if (duration !== 'infinity') {
+          setTimeLeft((prev) => prev - 1);
         }
       }, 1000);
+    } else if (duration !== 'infinity' && timeLeft === 0 && isActive) {
+      handleFinish();
     }
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, timeLeft, duration]);
 
-  // Sorgt dafür, dass man IMMER tippen kann, auch wenn man daneben geklickt hat
+  // GLOBALER KEY-LISTENER (Damit man immer tippen kann)
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      // 1. Ignoriere System-Tasten wie F5, F12, Cmd+R etc.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-
-      // 2. Prüfe, ob der User gerade in einem ANDEREN Feld schreibt (z.B. Name im Leaderboard)
+      
+      // Nicht stören, wenn man in einem anderen Input schreibt (z.B. Leaderboard Name)
       const isTypingElsewhere = 
         document.activeElement?.tagName === 'INPUT' && 
         document.activeElement !== inputRef.current;
-
       if (isTypingElsewhere) return;
 
-      // 3. Wenn es eine normale Taste ist, erzwinge den Fokus auf das Tipp-Feld
       if (e.key.length === 1 || e.key === 'Backspace') {
         inputRef.current?.focus();
       }
     };
 
-    // Event-Listener beim Start registrieren
     window.addEventListener('keydown', handleGlobalKeyDown);
-    
-    // Wichtig: Beim Schließen der Komponente wieder aufräumen
+    inputRef.current?.focus(); // Fokus beim Start
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, []); // Leeres Array = Läuft dauerhaft im Hintergrund
-
-// Auto-focus input immediately and keep it focused
-  useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isActive, words]); // Fokusiert beim Start und wenn neue Wörter geladen werden
-
-  // Clear feedback animation
-  useEffect(() => {
-    if (lastPressed) {
-      const timer = setTimeout(() => setLastPressed(null), 200);
-      return () => clearTimeout(timer);
-    }
-  }, [lastPressed]);
-
-  const handleFinish = () => {
-    onStop();
-    audioService.playSuccess();
-    
-    // Calculate final stats
-    let effectiveMinutes: number;
-    if (duration === 'infinity') {
-       effectiveMinutes = elapsedTime > 0 ? elapsedTime / 60 : 1/60;
-    } else {
-       effectiveMinutes = duration / 60; 
-    }
-
-    const wpm = Math.round((correctChars / 5) / effectiveMinutes);
-    const total = correctChars + incorrectChars;
-    const accuracy = total > 0 ? Math.round((correctChars / total) * 100) : 0;
-
-    onComplete({
-      wpm,
-      accuracy,
-      correctChars,
-      incorrectChars,
-      totalChars: total
-    });
-  };
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newVal = e.target.value;
-    
-    if (!isActive) {
-      onStart();
+    const value = e.target.value;
+    if (!startTime && value.length > 0) {
       setStartTime(Date.now());
+      onStart();
     }
 
-    const flatText = words.join(' ');
-    
-    // Check key press
-    if (newVal.length > input.length) {
-      const charIndex = newVal.length - 1;
-      const expected = flatText[charIndex];
-      const actual = newVal[charIndex];
-      const isCorrect = expected === actual;
+    const lastChar = value.slice(-1);
+    const expectedChar = words[value.length - 1];
 
-      if (isCorrect) {
-        audioService.playKeypress();
-        setCorrectChars(prev => prev + 1);
+    if (value.length > input.length) {
+      if (lastChar === expectedChar) {
+        setCorrectChars((prev) => prev + 1);
+        audioService.playKeyPress();
       } else {
+        setIncorrectChars((prev) => prev + 1);
         audioService.playError();
-        setIncorrectChars(prev => prev + 1);
       }
-      
-      setLastPressed({ key: actual, isCorrect });
+      setLastPressed(lastChar);
     }
 
-    setInput(newVal);
+    setInput(value);
 
-// Scroll logic
-    if (containerRef.current) {
-      // Wir suchen das "Cursor"-Element (das aktuelle Zeichen)
-      const cursorElement = containerRef.current.querySelector('.cursor-blink');
-      if (cursorElement) {
+    // --- INFINITY SCROLL LOGIC ---
+    setTimeout(() => {
+      if (containerRef.current) {
         const container = containerRef.current;
-        const cursorTop = (cursorElement as HTMLElement).offsetTop;
-        const containerHeight = container.offsetHeight;
-        
-        // Wenn der Cursor sich dem unteren Drittel nähert, scrolle ein Stück
-        if (cursorTop > container.scrollTop + containerHeight - 80) {
-          container.scrollTo({
-            top: cursorTop - 100,
-            behavior: 'smooth'
-          });
+        const currentEl = container.querySelector('.current-char') as HTMLElement;
+        if (currentEl) {
+          const containerHeight = container.offsetHeight;
+          const elementTop = currentEl.offsetTop;
+          const padding = 32;
+
+          // Scrollt, wenn der Cursor die untere Hälfte des Sichtfelds erreicht
+          if (elementTop > container.scrollTop + containerHeight / 2) {
+            container.scrollTo({
+              top: elementTop - containerHeight / 2 + padding,
+              behavior: 'smooth'
+            });
+          }
         }
       }
+    }, 0);
+
+    if (value.length === words.length) {
+      handleFinish();
     }
+  };
 
-  // Render text logic
+  const handleFinish = () => {
+    const timeSpent = duration === 'infinity' ? elapsedTime : (duration as number) - timeLeft;
+    const stats: TestStats = {
+      wpm: liveWpm,
+      accuracy: Math.round((correctChars / (correctChars + incorrectChars)) * 100) || 0,
+      errors: incorrectChars,
+      time: timeSpent,
+      chars: input.length
+    };
+    onComplete(stats);
+    onStop();
+  };
+
+  const liveWpm = useMemo(() => {
+    const timeElapsed = duration === 'infinity' ? elapsedTime : (duration as number) - timeLeft;
+    if (timeElapsed === 0) return 0;
+    const wordsTyped = correctChars / 5;
+    return Math.round(wordsTyped / (timeElapsed / 60));
+  }, [correctChars, timeLeft, elapsedTime, duration]);
+
   const renderText = () => {
-    const flatText = words.join(' ');
-    const chars = flatText.split('');
-    
     return (
-      <div className={`flex flex-wrap text-3xl leading-relaxed font-pixel select-none ${binaryMode ? 'break-all text-xl' : ''}`} style={{ wordBreak: binaryMode ? 'break-all' : 'break-word' }}>
-        {chars.map((char, index) => {
-          let statusClass = "text-gray-400 dark:text-gray-600";
-          let isCursor = false;
+      <div className="flex flex-wrap gap-y-4 text-2xl leading-relaxed select-none">
+        {words.map((char, index) => {
+          let colorClass = "text-gray-400";
+          const isTyped = index < input.length;
+          const isCurrent = index === input.length;
 
-          if (index < input.length) {
-            if (input[index] === char) {
-              statusClass = "text-retro-darkPanel dark:text-white"; 
-            } else {
-              statusClass = "text-retro-error bg-red-100 dark:bg-red-900/30"; 
-            }
-          } else if (index === input.length) {
-             isCursor = true;
+          if (isTyped) {
+            colorClass = input[index] === words[index] ? "text-retro-primary" : "text-retro-error underline";
           }
 
           return (
-            <span key={index} className={`${statusClass} relative`}>
-              {isCursor && (
-                <span className="absolute left-0 -bottom-1 w-full h-1 bg-retro-accent cursor-blink"></span>
+            <span
+              key={index}
+              className={`relative ${colorClass} ${isCurrent ? 'current-char' : ''} transition-colors duration-100`}
+            >
+              {char}
+              {isCurrent && (
+                <span className="absolute left-0 -bottom-1 w-full h-1 bg-retro-accent animate-pulse cursor-blink"></span>
               )}
-              {char === ' ' ? '\u00A0' : char}
             </span>
           );
         })}
@@ -259,17 +186,10 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
     );
   };
 
-  // Determine active char for visuals
-  const flatText = words.join(' ');
-  const nextChar = flatText[input.length] || '';
-
-  // Calculate live WPM
-  const currentMinutes = duration === 'infinity' ? (elapsedTime / 60) : ((typeof duration === 'number' ? duration - timeLeft : 0) / 60);
-  const liveWpm = currentMinutes > 0 ? Math.round((correctChars / 5) / currentMinutes) : 0;
+  const nextChar = words[input.length] || null;
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col gap-6">
-      
+    <div className="flex flex-col gap-8 w-full">
       {/* HUD */}
       <div className="flex flex-wrap gap-4 justify-between items-center bg-retro-panel dark:bg-retro-darkPanel p-4 border-2 border-black dark:border-white pixel-shadow">
         <div className="flex gap-4 md:gap-8 text-xl">
@@ -289,58 +209,31 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
           </div>
         </div>
         
-        {/* Controls Right Side */}
         <div className="flex items-center gap-4">
-          {/* Manual Finish Button (Useful for Infinity Mode) */}
           {isActive && (
             <Button variant="danger" size="sm" onClick={handleFinish} className="animate-pulse">
               {t.stop.toUpperCase()}
             </Button>
           )}
 
-          {/* Visual Options Toggles */}
           <div className="flex gap-2 text-xs">
-            <button 
-              onClick={() => setShowKeyboard(!showKeyboard)} 
-              className={`p-1 border ${showKeyboard ? 'bg-retro-primary text-white' : 'bg-gray-200 text-gray-500'}`}
-              title={t.toggle_keyboard || "Keyboard"}
-            >
-              ⌨️
-            </button>
-            <button 
-              onClick={() => setShowHands(!showHands)} 
-              className={`p-1 border ${showHands ? 'bg-retro-primary text-white' : 'bg-gray-200 text-gray-500'}`}
-              title={t.toggle_hands || "Hands"}
-            >
-              ✋
-            </button>
-            <button 
-              onClick={() => setShowKeyLabels(!showKeyLabels)} 
-              className={`p-1 border ${showKeyLabels ? 'bg-retro-primary text-white' : 'bg-gray-200 text-gray-500'}`}
-              title={t.toggle_labels || "Labels"}
-            >
-              ABC
-            </button>
-            <button 
-              onClick={() => setShowFingerColors(!showFingerColors)} 
-              className={`p-1 border ${showFingerColors ? 'bg-retro-primary text-white' : 'bg-gray-200 text-gray-500'}`}
-              title={t.toggle_colors || "Colors"}
-            >
-              🎨
-            </button>
+            <button onClick={() => setShowKeyboard(!showKeyboard)} className={`p-1 border ${showKeyboard ? 'bg-retro-primary text-white' : 'bg-gray-200 text-gray-500'}`}>⌨️</button>
+            <button onClick={() => setShowHands(!showHands)} className={`p-1 border ${showHands ? 'bg-retro-primary text-white' : 'bg-gray-200 text-gray-500'}`}>✋</button>
+            <button onClick={() => setShowKeyLabels(!showKeyLabels)} className={`p-1 border ${showKeyLabels ? 'bg-retro-primary text-white' : 'bg-gray-200 text-gray-500'}`}>ABC</button>
+            <button onClick={() => setShowFingerColors(!showFingerColors)} className={`p-1 border ${showFingerColors ? 'bg-retro-primary text-white' : 'bg-gray-200 text-gray-500'}`}>🎨</button>
           </div>
         </div>
       </div>
 
       {/* Typing Field */}
       <div 
-        className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-400 p-8 min-h-[150px] max-h-[250px] pixel-shadow cursor-text overflow-hidden"
-        onClick={() => inputRef.current?.focus()}
         ref={containerRef}
+        className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-400 p-8 min-h-[150px] max-h-[200px] pixel-shadow cursor-text overflow-hidden"
+        onClick={() => inputRef.current?.focus()}
       >
         {!isActive && (duration === 'infinity' || timeLeft === duration) && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-black/80 z-10 p-4 text-center">
-            <span className={`text-xl animate-pulse text-gray-500 dark:text-gray-300 ${binaryMode ? 'break-all' : ''}`}>
+            <span className={`text-xl animate-pulse text-gray-500 dark:text-gray-300`}>
                {t.start_placeholder}
             </span>
           </div>
@@ -364,22 +257,10 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
       {/* Visual Helpers */}
       <div className="flex flex-col items-center gap-2">
         {showHands && (
-          <Hands 
-            language={language}
-            activeChar={nextChar}
-            showColors={showFingerColors}
-            lastPressedKey={lastPressed}
-          />
+          <Hands language={language} activeChar={nextChar} showColors={showFingerColors} lastPressedKey={lastPressed} />
         )}
-        
         {showKeyboard && (
-          <VirtualKeyboard 
-            language={language}
-            activeChar={nextChar}
-            showLabels={showKeyLabels}
-            showColors={showFingerColors}
-            lastPressedKey={lastPressed}
-          />
+          <VirtualKeyboard language={language} activeChar={nextChar} showLabels={showKeyLabels} showColors={showFingerColors} lastPressedKey={lastPressed} />
         )}
       </div>
     </div>
