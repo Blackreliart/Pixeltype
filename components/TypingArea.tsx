@@ -97,15 +97,58 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    
-    // Start-Trigger
     if (!startTime && value.length > 0) {
       setStartTime(Date.now());
       onStart();
     }
 
+    if (value.length > input.length) {
+      const lastChar = value.slice(-1);
+      const expectedChar = words[value.length - 1];
+      if (lastChar === expectedChar) {
+        setCorrectChars((prev) => prev + 1);
+        audioService.playKeyPress();
+      } else {
+        setIncorrectChars((prev) => prev + 1);
+        audioService.playError();
+      }
+      setLastPressed(lastChar);
+    }
+
+    setInput(value);
+
+    // --- FINALE SCROLL-LOGIK ---
+    setTimeout(() => {
+      const container = containerRef.current;
+      const currentEl = container?.querySelector('.current-char') as HTMLElement;
+      
+      if (container && currentEl) {
+        const containerRect = container.getBoundingClientRect();
+        const charRect = currentEl.getBoundingClientRect();
+
+        // Wir berechnen, wie weit der Cursor vom oberen Rand des Kastens entfernt ist
+        const relativeTop = charRect.top - containerRect.top;
+
+        // Wenn der Cursor tiefer als 100px (ca. Mitte des Feldes) wandert
+        if (relativeTop > 110) {
+          // Wir schieben den Text um eine Zeilenhöhe hoch
+          setLineOffset(prev => prev + 45);
+        }
+        
+        // Backspace-Check: Wenn man hochlöscht und über den oberen Rand (32px padding) kommt
+        if (relativeTop < 40 && lineOffset > 0) {
+          setLineOffset(prev => Math.max(0, prev - 45));
+        }
+      }
+    }, 0);
+
+    if (value.length === words.length) {
+      handleFinish();
+    }
+  };
+  
     // Treffer-Logik & Sound
     if (value.length > input.length) {
       const lastChar = value.slice(-1);
