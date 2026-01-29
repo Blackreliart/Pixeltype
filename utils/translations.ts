@@ -1,3 +1,5 @@
+export type Language = 'de' | 'en' | 'es' | 'fr' | 'it' | 'nl';
+
 export const TRANSLATIONS: Record<Language, Record<string, string>> = {
   de: {
     mode_words: "Wörter",
@@ -166,7 +168,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     leaderboard_title: "Ranglijst",
     leaderboard_name: "Naam",
     leaderboard_date: "Datum",
-    leaderboard_empty: "Nog geen scores. Begin met typen!",
+    leaderboard_empty: "Nog geen scores. Begin mit typen!",
     leaderboard_duration: "Duur",
     reset: "Reset",
     save: "Opslaan",
