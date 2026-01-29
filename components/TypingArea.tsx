@@ -110,6 +110,32 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, timeLeft, duration]);
 
+  // Sorgt dafür, dass man IMMER tippen kann, auch wenn man daneben geklickt hat
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      // 1. Ignoriere System-Tasten wie F5, F12, Cmd+R etc.
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      // 2. Prüfe, ob der User gerade in einem ANDEREN Feld schreibt (z.B. Name im Leaderboard)
+      const isTypingElsewhere = 
+        document.activeElement?.tagName === 'INPUT' && 
+        document.activeElement !== inputRef.current;
+
+      if (isTypingElsewhere) return;
+
+      // 3. Wenn es eine normale Taste ist, erzwinge den Fokus auf das Tipp-Feld
+      if (e.key.length === 1 || e.key === 'Backspace') {
+        inputRef.current?.focus();
+      }
+    };
+
+    // Event-Listener beim Start registrieren
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    
+    // Wichtig: Beim Schließen der Komponente wieder aufräumen
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []); // Leeres Array = Läuft dauerhaft im Hintergrund
+
 // Auto-focus input immediately and keep it focused
   useEffect(() => {
     if (inputRef.current) {
