@@ -38,6 +38,9 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
   const [startTime, setStartTime] = useState<number | null>(null);
   const [lastPressed, setLastPressed] = useState<string | null>(null);
   
+  // Scroll State für zeilenweises Hochrutschen
+  const [lineOffset, setLineOffset] = useState(0);
+
   // UI States
   const [showKeyboard, setShowKeyboard] = useState(true);
   const [showHands, setShowHands] = useState(true);
@@ -47,10 +50,12 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Initialisiere Text
+  // Initialisiere Text & Reset Scroll
   useEffect(() => {
     setWords(generateText(mode, language, binaryMode).split(''));
-  }, [mode, language, binaryMode]);
+    setLineOffset(0);
+    setInput('');
+  }, [mode, language, binaryMode, duration]);
 
   // Timer Logik
   useEffect(() => {
@@ -68,12 +73,10 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
     return () => clearInterval(interval);
   }, [isActive, timeLeft, duration]);
 
-  // GLOBALER KEY-LISTENER (Damit man immer tippen kann)
+  // Globaler Key-Listener für Fokus-Erzwingung
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      
-      // Nicht stören, wenn man in einem anderen Input schreibt (z.B. Leaderboard Name)
       const isTypingElsewhere = 
         document.activeElement?.tagName === 'INPUT' && 
         document.activeElement !== inputRef.current;
@@ -85,7 +88,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
     };
 
     window.addEventListener('keydown', handleGlobalKeyDown);
-    inputRef.current?.focus(); // Fokus beim Start
+    inputRef.current?.focus();
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
   }, []);
 
@@ -96,10 +99,9 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
       onStart();
     }
 
-    const lastChar = value.slice(-1);
-    const expectedChar = words[value.length - 1];
-
     if (value.length > input.length) {
+      const lastChar = value.slice(-1);
+      const expectedChar = words[value.length - 1];
       if (lastChar === expectedChar) {
         setCorrectChars((prev) => prev + 1);
         audioService.playKeyPress();
@@ -112,22 +114,19 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
     setInput(value);
 
-    // --- INFINITY SCROLL LOGIC ---
+    // --- ZEILENWEISE SCROLL LOGIK ---
     setTimeout(() => {
       if (containerRef.current) {
-        const container = containerRef.current;
-        const currentEl = container.querySelector('.current-char') as HTMLElement;
+        const currentEl = containerRef.current.querySelector('.current-char') as HTMLElement;
         if (currentEl) {
-          const containerHeight = container.offsetHeight;
-          const elementTop = currentEl.offsetTop;
-          const padding = 32;
+          const containerRect = containerRef.current.getBoundingClientRect();
+          const charRect = currentEl.getBoundingClientRect();
+          const relativeTop = charRect.top - containerRect.top;
 
-          // Scrollt, wenn der Cursor die untere Hälfte des Sichtfelds erreicht
-          if (elementTop > container.scrollTop + containerHeight / 2) {
-            container.scrollTo({
-              top: elementTop - containerHeight / 2 + padding,
-              behavior: 'smooth'
-            });
+          // Sobald der Cursor tiefer als die Mitte des Feldes rutscht (ca. 100px bei p-8)
+          // schieben wir den gesamten Text um eine Zeilenhöhe (ca. 42px) nach oben.
+          if (relativeTop > 120) {
+            setLineOffset(prev => prev + 42); 
           }
         }
       }
@@ -154,13 +153,15 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
   const liveWpm = useMemo(() => {
     const timeElapsed = duration === 'infinity' ? elapsedTime : (duration as number) - timeLeft;
     if (timeElapsed === 0) return 0;
-    const wordsTyped = correctChars / 5;
-    return Math.round(wordsTyped / (timeElapsed / 60));
+    return Math.round((correctChars / 5) / (timeElapsed / 60));
   }, [correctChars, timeLeft, elapsedTime, duration]);
 
   const renderText = () => {
     return (
-      <div className="flex flex-wrap gap-y-4 text-2xl leading-relaxed select-none">
+      <div 
+        className="flex flex-wrap gap-x-[0.2ch] gap-y-3 text-2xl leading-relaxed select-none transition-all duration-300 ease-out"
+        style={{ marginTop: `-${lineOffset}px` }} // Hier wird der Text hochgeschoben
+      >
         {words.map((char, index) => {
           let colorClass = "text-gray-400";
           const isTyped = index < input.length;
@@ -173,7 +174,7 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
           return (
             <span
               key={index}
-              className={`relative ${colorClass} ${isCurrent ? 'current-char' : ''} transition-colors duration-100`}
+              className={`relative ${colorClass} ${isCurrent ? 'current-char' : ''}`}
             >
               {char}
               {isCurrent && (
@@ -228,12 +229,12 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
       {/* Typing Field */}
       <div 
         ref={containerRef}
-        className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-400 p-8 min-h-[150px] max-h-[200px] pixel-shadow cursor-text overflow-hidden"
+        className="relative bg-white dark:bg-gray-800 border-2 border-black dark:border-gray-400 p-8 h-[160px] pixel-shadow cursor-text overflow-hidden"
         onClick={() => inputRef.current?.focus()}
       >
         {!isActive && (duration === 'infinity' || timeLeft === duration) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-black/80 z-10 p-4 text-center">
-            <span className={`text-xl animate-pulse text-gray-500 dark:text-gray-300`}>
+          <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-black/80 z-20 p-4 text-center">
+            <span className="text-xl animate-pulse text-gray-500 dark:text-gray-300">
                {t.start_placeholder}
             </span>
           </div>
@@ -256,12 +257,8 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
       {/* Visual Helpers */}
       <div className="flex flex-col items-center gap-2">
-        {showHands && (
-          <Hands language={language} activeChar={nextChar} showColors={showFingerColors} lastPressedKey={lastPressed} />
-        )}
-        {showKeyboard && (
-          <VirtualKeyboard language={language} activeChar={nextChar} showLabels={showKeyLabels} showColors={showFingerColors} lastPressedKey={lastPressed} />
-        )}
+        {showHands && <Hands language={language} activeChar={nextChar} showColors={showFingerColors} lastPressedKey={lastPressed} />}
+        {showKeyboard && <VirtualKeyboard language={language} activeChar={nextChar} showLabels={showKeyLabels} showColors={showFingerColors} lastPressedKey={lastPressed} />}
       </div>
     </div>
   );
