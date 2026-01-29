@@ -31,6 +31,7 @@ function App() {
   const [language, setLanguage] = useState<Language>('de');
   const [isGameActive, setIsGameActive] = useState(false);
   const [lastStats, setLastStats] = useState<TestStats | null>(null);
+  const [resetKey, setResetKey] = useState(0); // NEU: Triggert den harten Reset der TypingArea
   
   // Data State
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
@@ -58,9 +59,7 @@ function App() {
   // Konami Code Listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // If binary mode is already active, we don't need to listen
       if (binaryMode) return;
-
       const key = e.key;
       const expectedKey = KONAMI_CODE[konamiIndex];
 
@@ -69,7 +68,7 @@ function App() {
         if (nextIndex === KONAMI_CODE.length) {
           setBinaryMode(true);
           setKonamiIndex(0);
-          audioService.playSuccess(); // Little audio cue
+          audioService.playSuccess();
         } else {
           setKonamiIndex(nextIndex);
         }
@@ -130,11 +129,12 @@ function App() {
 
     const newBoard = [...leaderboard, newEntry]
       .sort((a, b) => b.wpm - a.wpm || b.accuracy - a.accuracy)
-      .slice(0, 50); // Keep top 50
+      .slice(0, 50);
 
     setLeaderboard(newBoard);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(newBoard));
     setLastStats(null);
+    setResetKey(prev => prev + 1); // Reset nach dem Speichern
     setCurrentView(View.LEADERBOARD);
   };
 
@@ -153,7 +153,7 @@ function App() {
     <div className={`min-h-screen flex flex-col font-pixel ${binaryMode ? 'font-mono' : ''}`}>
       {/* Header */}
       <header className="p-4 border-b-4 border-black dark:border-white bg-retro-panel dark:bg-retro-darkPanel flex flex-wrap justify-between items-center gap-4 sticky top-0 z-30 shadow-md">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentView(View.GAME)}>
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setCurrentView(View.GAME); setLastStats(null); setResetKey(prev => prev + 1); }}>
             <div className="w-8 h-8 bg-retro-primary"></div>
             <h1 className="text-3xl font-bold tracking-tighter">PixelType <span className="text-retro-accent">{language.toUpperCase()}</span></h1>
         </div>
@@ -248,6 +248,7 @@ function App() {
             </div>
 
             <TypingArea 
+              key={`${language}-${mode}-${duration}-${resetKey}-${binaryMode}`} 
               duration={duration} 
               mode={mode}
               language={language}
@@ -288,6 +289,7 @@ function App() {
           onDiscard={() => {
             setLastStats(null);
             setIsGameActive(false);
+            setResetKey(prev => prev + 1); // Hier wird die TypingArea neu generiert
           }}
           language={language}
           t={t}
