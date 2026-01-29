@@ -2,8 +2,8 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["main"] # Falls dein Haupt-Branch "master" heißt, hier ändern!
-  workflow_dispatch: # Erlaubt es, den Build manuell zu starten
+    branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,7 +11,8 @@ permissions:
   id-token: write
 
 jobs:
-  build-and-deploy:
+  # Job 1: Bauen und Artefakt hochladen
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -21,7 +22,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          #cache: 'npm'
 
       - name: Install dependencies
         run: npm install
@@ -32,7 +32,16 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./dist # Vite erstellt standardmäßig alles in den 'dist' Ordner
+          path: ./dist
 
+  # Job 2: Das hochgeladene Artefakt tatsächlich deployen
+  deploy:
+    needs: build # Wichtig: Dieser Job wartet, bis der Build fertig ist
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
