@@ -206,18 +206,24 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
 
     setInput(newVal);
 
-    // Scroll logic
-    const wordsTyped = newVal.split(' ').length;
-    if (wordsTyped > 8) { 
-       if (containerRef.current) {
-          const lineHeight = 40; 
-          const estimatedLines = Math.floor(newVal.length / 45); 
-          if (estimatedLines > 1) {
-            containerRef.current.scrollTop = (estimatedLines - 1) * lineHeight;
-          }
-       }
+// Scroll logic
+    if (containerRef.current) {
+      // Wir suchen das "Cursor"-Element (das aktuelle Zeichen)
+      const cursorElement = containerRef.current.querySelector('.cursor-blink');
+      if (cursorElement) {
+        const container = containerRef.current;
+        const cursorTop = (cursorElement as HTMLElement).offsetTop;
+        const containerHeight = container.offsetHeight;
+        
+        // Wenn der Cursor sich dem unteren Drittel nähert, scrolle ein Stück
+        if (cursorTop > container.scrollTop + containerHeight - 80) {
+          container.scrollTo({
+            top: cursorTop - 100,
+            behavior: 'smooth'
+          });
+        }
+      }
     }
-  };
 
   // Render text logic
   const renderText = () => {
