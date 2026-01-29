@@ -110,12 +110,12 @@ export const TypingArea: React.FC<TypingAreaProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive, timeLeft, duration]);
 
-  // Auto-focus input when active
+// Auto-focus input immediately and keep it focused
   useEffect(() => {
-    if (isActive && inputRef.current) {
+    if (inputRef.current) {
       inputRef.current.focus();
     }
-  }, [isActive]);
+  }, [isActive, words]); // Fokusiert beim Start und wenn neue Wörter geladen werden
 
   // Clear feedback animation
   useEffect(() => {
